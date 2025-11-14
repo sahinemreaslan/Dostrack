@@ -2,7 +2,7 @@ from easydict import EasyDict as edict
 import yaml
 
 """
-Add default config for OSTrack.
+Add default config for DOSTrack (DINO-based Object Tracking).
 """
 cfg = edict()
 

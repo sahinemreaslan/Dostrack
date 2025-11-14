@@ -1,6 +1,6 @@
 import math
 
-from lib.models.ostrack import build_ostrack
+from lib.models.dostrack import build_dostrack
 from lib.test.tracker.basetracker import BaseTracker
 import torch
 
@@ -16,10 +16,10 @@ from lib.utils.box_ops import clip_box
 from lib.utils.ce_utils import generate_mask_cond
 
 
-class OSTrack(BaseTracker):
+class DOSTrack(BaseTracker):
     def __init__(self, params, dataset_name):
-        super(OSTrack, self).__init__(params)
-        network = build_ostrack(params.cfg, training=False)
+        super(DOSTrack, self).__init__(params)
+        network = build_dostrack(params.cfg, training=False)
         network.load_state_dict(torch.load(self.params.checkpoint, map_location='cpu', weights_only=False)['net'], strict=True)
         self.cfg = params.cfg
         self.network = network.cuda()
@@ -165,4 +165,4 @@ class OSTrack(BaseTracker):
 
 
 def get_tracker_class():
-    return OSTrack
+    return DOSTrack

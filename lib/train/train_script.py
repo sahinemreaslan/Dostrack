@@ -10,9 +10,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 # some more advanced functions
 from .base_functions import *
 # network related
-from lib.models.ostrack import build_ostrack
+from lib.models.dostrack import build_dostrack
 # forward propagation related
-from lib.train.actors import OSTrackActor
+from lib.train.actors import DOSTrackActor
 # for import modules
 import importlib
 
@@ -20,7 +20,7 @@ from ..utils.focal_loss import FocalLoss
 
 
 def run(settings):
-    settings.description = 'Training script for STARK-S, STARK-ST stage1, and STARK-ST stage2'
+    settings.description = 'Training script for DOSTrack (DINO-based Object Tracking)'
 
     # update the default configs with config file
     if not os.path.exists(settings.cfg_file):
@@ -51,8 +51,8 @@ def run(settings):
         cfg.ckpt_dir = settings.save_dir
 
     # Create network
-    if settings.script_name == "ostrack":
-        net = build_ostrack(cfg)
+    if settings.script_name == "dostrack" or settings.script_name == "ostrack":
+        net = build_dostrack(cfg)
     else:
         raise ValueError("illegal script name")
 
@@ -68,11 +68,11 @@ def run(settings):
     settings.distill = getattr(cfg.TRAIN, "DISTILL", False)
     settings.distill_loss_type = getattr(cfg.TRAIN, "DISTILL_LOSS_TYPE", "KL")
     # Loss functions and Actors
-    if settings.script_name == "ostrack":
+    if settings.script_name == "dostrack" or settings.script_name == "ostrack":
         focal_loss = FocalLoss()
         objective = {'giou': giou_loss, 'l1': l1_loss, 'focal': focal_loss, 'cls': BCEWithLogitsLoss()}
         loss_weight = {'giou': cfg.TRAIN.GIOU_WEIGHT, 'l1': cfg.TRAIN.L1_WEIGHT, 'focal': 1., 'cls': 1.0}
-        actor = OSTrackActor(net=net, objective=objective, loss_weight=loss_weight, settings=settings, cfg=cfg)
+        actor = DOSTrackActor(net=net, objective=objective, loss_weight=loss_weight, settings=settings, cfg=cfg)
     else:
         raise ValueError("illegal script name")
 

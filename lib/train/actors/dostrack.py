@@ -7,8 +7,8 @@ from ...utils.heapmap_utils import generate_heatmap
 from ...utils.ce_utils import generate_mask_cond, adjust_keep_rate
 
 
-class OSTrackActor(BaseActor):
-    """ Actor for training OSTrack models """
+class DOSTrackActor(BaseActor):
+    """ Actor for training DOSTrack models """
 
     def __init__(self, net, objective, loss_weight, settings, cfg=None):
         super().__init__(net, objective)

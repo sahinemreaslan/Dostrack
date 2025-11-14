@@ -1,5 +1,6 @@
 """
-Basic OSTrack model.
+DOSTrack model - DINO-based Object Tracking.
+Integrates DINOv3 vision transformers with object tracking framework.
 """
 import math
 import os
@@ -10,14 +11,14 @@ from torch import nn
 from torch.nn.modules.transformer import _get_clones
 
 from lib.models.layers.head import build_box_head
-from lib.models.ostrack.vit import vit_base_patch16_224
-from lib.models.ostrack.vit_ce import vit_large_patch16_224_ce, vit_base_patch16_224_ce
-from lib.models.ostrack.dinov3_models import dinov3_vits16, dinov3_vitb16, dinov3_vitl16, dinov3_vitg16
+from lib.models.dostrack.vit import vit_base_patch16_224
+from lib.models.dostrack.vit_ce import vit_large_patch16_224_ce, vit_base_patch16_224_ce
+from lib.models.dostrack.dinov3_models import dinov3_vits16, dinov3_vitb16, dinov3_vitl16, dinov3_vitg16
 from lib.utils.box_ops import box_xyxy_to_cxcywh
 
 
-class OSTrack(nn.Module):
-    """ This is the base class for OSTrack """
+class DOSTrack(nn.Module):
+    """ This is the base class for DOSTrack (DINO-based Object Tracking) """
 
     def __init__(self, transformer, box_head, aux_loss=False, head_type="CORNER"):
         """ Initializes the model.
@@ -154,10 +155,11 @@ class OSTrack(nn.Module):
             raise NotImplementedError
 
 
-def build_ostrack(cfg, training=True):
+def build_dostrack(cfg, training=True):
+    """Build DOSTrack model based on configuration."""
     current_dir = os.path.dirname(os.path.abspath(__file__))  # This is your Project Root
     pretrained_path = os.path.join(current_dir, '../../../pretrained_models')
-    if cfg.MODEL.PRETRAIN_FILE and ('OSTrack' not in cfg.MODEL.PRETRAIN_FILE) and training:
+    if cfg.MODEL.PRETRAIN_FILE and ('DOSTrack' not in cfg.MODEL.PRETRAIN_FILE) and training:
         pretrained = os.path.join(pretrained_path, cfg.MODEL.PRETRAIN_FILE)
     else:
         pretrained = ''
@@ -231,14 +233,14 @@ def build_ostrack(cfg, training=True):
 
     box_head = build_box_head(cfg, hidden_dim)
 
-    model = OSTrack(
+    model = DOSTrack(
         backbone,
         box_head,
         aux_loss=False,
         head_type=cfg.MODEL.HEAD.TYPE,
     )
 
-    if 'OSTrack' in cfg.MODEL.PRETRAIN_FILE and training:
+    if 'DOSTrack' in cfg.MODEL.PRETRAIN_FILE and training:
         checkpoint = torch.load(cfg.MODEL.PRETRAIN_FILE, map_location="cpu")
         missing_keys, unexpected_keys = model.load_state_dict(checkpoint["net"], strict=False)
         print('Load pretrained model from: ' + cfg.MODEL.PRETRAIN_FILE)

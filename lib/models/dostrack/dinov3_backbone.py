@@ -1,6 +1,6 @@
 """
-DINOv3 backbone adapter for OSTrack
-Integrates DINOv3 Vision Transformer with OSTrack framework
+DINOv3 backbone adapter for DOSTrack
+Integrates DINOv3 Vision Transformer with DOSTrack framework
 """
 import math
 import sys
@@ -23,16 +23,16 @@ except ImportError as e:
     DinoVisionTransformer = None
     RopePositionEmbedding = None
 
-from lib.models.ostrack.base_backbone import BaseBackbone
+from lib.models.dostrack.base_backbone import BaseBackbone
 from lib.models.layers.lora import apply_lora_to_model, LoRAConfig, print_lora_info
 
 
 class DINOv3Backbone(BaseBackbone):
     """
-    DINOv3 Vision Transformer backbone adapted for OSTrack.
+    DINOv3 Vision Transformer backbone adapted for DOSTrack.
 
     This class wraps the DINOv3 model to provide an interface compatible
-    with OSTrack's tracking framework while maintaining the powerful
+    with DOSTrack's tracking framework while maintaining the powerful
     features of DINOv3 including RoPE positional embeddings and
     self-supervised learning capabilities.
     """
@@ -279,7 +279,7 @@ class DINOv3Backbone(BaseBackbone):
         **kwargs
     ) -> Tuple[torch.Tensor, dict]:
         """
-        Forward pass compatible with OSTrack interface.
+        Forward pass compatible with DOSTrack interface.
 
         Args:
             z: Template image tensor (B, C, H, W)

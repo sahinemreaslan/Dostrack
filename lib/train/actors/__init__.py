@@ -1,2 +1,4 @@
 from .base_actor import BaseActor
-from .ostrack import OSTrackActor
+from .dostrack import DOSTrackActor
+# Backward compatibility
+OSTrackActor = DOSTrackActor

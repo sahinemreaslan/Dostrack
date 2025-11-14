@@ -1,5 +1,18 @@
-# OSTrack
-The official implementation for the **ECCV 2022** paper [_Joint Feature Learning and Relation Modeling for Tracking: A One-Stream Framework_](https://arxiv.org/abs/2203.11991).
+# DOSTrack - DINO-based Object Tracking
+
+**DOSTrack** is an advanced object tracking framework that integrates **DINOv3** vision transformers with the proven OSTrack architecture. This project builds upon the original OSTrack (ECCV 2022) framework, replacing the MAE-pretrained ViT backbone with DINOv3 to leverage its superior feature extraction capabilities and multi-resolution feature processing.
+
+## Key Features
+
+- **DINOv3 Integration**: Utilizes state-of-the-art DINOv3 vision transformers for robust feature extraction
+- **Multi-Resolution Support**: Exploits DINOv3's ability to handle different resolutions effectively
+- **RoPE Positional Embeddings**: Benefits from rotary position embeddings for better spatial understanding
+- **LoRA Fine-tuning**: Optional parameter-efficient fine-tuning using Low-Rank Adaptation
+- **Flexible Architecture**: Supports multiple DINOv3 variants (ViT-S, ViT-B, ViT-L, ViT-G)
+
+## Original OSTrack
+
+This project is based on the official implementation for the **ECCV 2022** paper [_Joint Feature Learning and Relation Modeling for Tracking: A One-Stream Framework_](https://arxiv.org/abs/2203.11991).
 
 [[Models](https://drive.google.com/drive/folders/1ttafo0O5S9DXK2PX0YqPvPrQ-HWJjhSy?usp=sharing)][[Raw Results](https://drive.google.com/drive/folders/1TYU5flzZA1ap2SLdzlGRQDbObwMxCiaR?usp=sharing)][[Training logs](https://drive.google.com/drive/folders/1LUsGf9JRV0k-R3TA7UFBRlcic22M4uBp?usp=sharing)]
 
@@ -106,50 +119,80 @@ Put the tracking datasets in ./data. It should look like this:
 
 
 ## Training
-Download pre-trained [MAE ViT-Base weights](https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth) and put it under `$PROJECT_ROOT$/pretrained_models` (different pretrained models can also be used, see [MAE](https://github.com/facebookresearch/mae) for more details).
 
-```
-python tracking/train.py --script ostrack --config vitb_256_mae_ce_32x4_ep300 --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
+### Option 1: Training with DINOv3 (Recommended)
+
+Download pre-trained DINOv3 weights and put them under `$PROJECT_ROOT$/pretrained_models`:
+- [DINOv3 ViT-Small](https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth)
+- [DINOv3 ViT-Base](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth)
+- [DINOv3 ViT-Large](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth)
+
+```bash
+# Training with DINOv3 ViT-Base (frozen backbone)
+python tracking/train.py --script dostrack --config dinov3_vitb16_no_ce --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
+
+# Training with LoRA fine-tuning
+python tracking/train.py --script dostrack --config dinov3_vitb16_lora_ce_32x4_ep300 --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
 ```
 
-Replace `--config` with the desired model config under `experiments/ostrack`. We use [wandb](https://github.com/wandb/client) to record detailed training logs, in case you don't want to use wandb, set `--use_wandb 0`.
+### Option 2: Training with Original MAE ViT
+
+Download pre-trained [MAE ViT-Base weights](https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth) and put it under `$PROJECT_ROOT$/pretrained_models`:
+
+```bash
+python tracking/train.py --script dostrack --config vitb_256_mae_ce_32x4_ep300 --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
+```
+
+Replace `--config` with the desired model config under `experiments/dostrack`. We use [wandb](https://github.com/wandb/client) to record detailed training logs, in case you don't want to use wandb, set `--use_wandb 0`.
 
 
 ## Evaluation
-Download the model weights from [Google Drive](https://drive.google.com/drive/folders/1PS4inLS8bWNCecpYZ0W2fE5-A04DvTcd?usp=sharing) 
 
-Put the downloaded weights on `$PROJECT_ROOT$/output/checkpoints/train/ostrack`
+Put the trained weights on `$PROJECT_ROOT$/output/checkpoints/train/dostrack`
 
 Change the corresponding values of `lib/test/evaluation/local.py` to the actual benchmark saving paths
 
+### Testing with DOSTrack
+
 Some testing examples:
 - LaSOT or other off-line evaluated benchmarks (modify `--dataset` correspondingly)
-```
-python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset lasot --threads 16 --num_gpus 4
+```bash
+python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset lasot --threads 16 --num_gpus 4
 python tracking/analysis_results.py # need to modify tracker configs and names
 ```
 - GOT10K-test
-```
-python tracking/test.py ostrack vitb_384_mae_ce_32x4_got10k_ep100 --dataset got10k_test --threads 16 --num_gpus 4
-python lib/test/utils/transform_got10k.py --tracker_name ostrack --cfg_name vitb_384_mae_ce_32x4_got10k_ep100
+```bash
+python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset got10k_test --threads 16 --num_gpus 4
+python lib/test/utils/transform_got10k.py --tracker_name dostrack --cfg_name dinov3_vitb16_no_ce
 ```
 - TrackingNet
-```
-python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset trackingnet --threads 16 --num_gpus 4
-python lib/test/utils/transform_trackingnet.py --tracker_name ostrack --cfg_name vitb_384_mae_ce_32x4_ep300
+```bash
+python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset trackingnet --threads 16 --num_gpus 4
+python lib/test/utils/transform_trackingnet.py --tracker_name dostrack --cfg_name dinov3_vitb16_no_ce
 ```
 
-## Visualization or Debug 
-[Visdom](https://github.com/fossasia/visdom) is used for visualization. 
+### Backward Compatibility
+
+The framework still supports testing with original OSTrack models:
+```bash
+python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset lasot --threads 16 --num_gpus 4
+```
+
+## Visualization or Debug
+[Visdom](https://github.com/fossasia/visdom) is used for visualization.
 1. Alive visdom in the server by running `visdom`:
 
 2. Simply set `--debug 1` during inference for visualization, e.g.:
-```
+```bash
+# DOSTrack visualization
+python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset vot22 --threads 1 --num_gpus 1 --debug 1
+
+# Original OSTrack visualization
 python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset vot22 --threads 1 --num_gpus 1 --debug 1
 ```
 3. Open `http://localhost:8097` in your browser (remember to change the IP address and port according to the actual situation).
 
-4. Then you can visualize the candidate elimination process.
+4. Then you can visualize the tracking process and feature maps.
 
 ![ECE_vis](https://github.com/botaoye/OSTrack/blob/main/assets/vis.png)
 
@@ -157,23 +200,37 @@ python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset vot22 --thr
 ## Test FLOPs, and Speed
 *Note:* The speeds reported in our paper were tested on a single RTX2080Ti GPU.
 
-```
-# Profiling vitb_256_mae_ce_32x4_ep300
-python tracking/profile_model.py --script ostrack --config vitb_256_mae_ce_32x4_ep300
-# Profiling vitb_384_mae_ce_32x4_ep300
-python tracking/profile_model.py --script ostrack --config vitb_384_mae_ce_32x4_ep300
+```bash
+# Profiling DOSTrack with DINOv3
+python tracking/profile_model.py --script dostrack --config dinov3_vitb16_no_ce
+
+# Profiling original OSTrack models
+python tracking/profile_model.py --script dostrack --config vitb_256_mae_ce_32x4_ep300
+python tracking/profile_model.py --script dostrack --config vitb_384_mae_ce_32x4_ep300
 ```
 
+
+## Architecture Overview
+
+DOSTrack extends the OSTrack framework with DINOv3 integration:
+
+- **Backbone**: DINOv3 Vision Transformers (ViT-S/B/L/G) with RoPE positional embeddings
+- **Feature Fusion**: One-stream architecture for joint template-search processing
+- **Head**: Center-based or corner-based prediction heads
+- **Training**: Supports frozen backbone, LoRA fine-tuning, or full fine-tuning
 
 ## Acknowledgments
-* Thanks for the [STARK](https://github.com/researchmm/Stark) and [PyTracking](https://github.com/visionml/pytracking) library, which helps us to quickly implement our ideas.
-* We use the implementation of the ViT from the [Timm](https://github.com/rwightman/pytorch-image-models) repo.  
 
+* Thanks to the [OSTrack](https://github.com/botaoye/OSTrack) team for the excellent tracking framework
+* Thanks to Meta AI for [DINOv3](https://github.com/facebookresearch/dinov3) pre-trained models
+* Thanks for the [STARK](https://github.com/researchmm/Stark) and [PyTracking](https://github.com/visionml/pytracking) libraries
+* We use the implementation of the ViT from the [Timm](https://github.com/rwightman/pytorch-image-models) repo
 
 ## Citation
-If our work is useful for your research, please consider citing:
 
-```Bibtex
+If you use DOSTrack in your research, please cite the original OSTrack paper:
+
+```bibtex
 @inproceedings{ye2022ostrack,
   title={Joint Feature Learning and Relation Modeling for Tracking: A One-Stream Framework},
   author={Ye, Botao and Chang, Hong and Ma, Bingpeng and Shan, Shiguang and Chen, Xilin},
@@ -181,4 +238,18 @@ If our work is useful for your research, please consider citing:
   year={2022}
 }
 ```
-# Dostrack
+
+And consider citing DINOv3:
+
+```bibtex
+@article{oquab2023dinov3,
+  title={DINOv3: Scaling Self-Supervised Learning with Vision Transformers},
+  author={Oquab, Maxime and Darcet, Timoth{\'e}e and Moutakanni, Th{\'e}o and others},
+  journal={arXiv preprint arXiv:2304.07193},
+  year={2023}
+}
+```
+
+---
+
+# DOSTrack - DINO-based Object Tracking
