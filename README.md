@@ -1,14 +1,46 @@
-# DOSTrack - DINO-based Object Tracking
+# DOSTrack - Dynamic Object Tracking with Adaptive Sizing
 
-**DOSTrack** is an advanced object tracking framework that integrates **DINOv3** vision transformers with the proven OSTrack architecture. This project builds upon the original OSTrack (ECCV 2022) framework, replacing the MAE-pretrained ViT backbone with DINOv3 to leverage its superior feature extraction capabilities and multi-resolution feature processing.
+**DOSTrack** addresses fundamental limitations in visual object tracking by introducing **truly dynamic template and search region sizing**. Unlike traditional trackers that use fixed 128×128 templates and 256×256 search regions, DOSTrack dynamically adapts to object characteristics, solving critical problems where:
+- Small objects (30×30 pixels) get poor representation in large templates
+- Large objects exceed fixed search regions
+- Objects moving out-of-view require adaptive search expansion
 
-## Key Features
+Built on DINOv3's powerful feature extraction and RoPE positional embeddings, DOSTrack achieves robust tracking across extreme scale variations and challenging scenarios.
 
-- **DINOv3 Integration**: Utilizes state-of-the-art DINOv3 vision transformers for robust feature extraction
-- **Multi-Resolution Support**: Exploits DINOv3's ability to handle different resolutions effectively
-- **RoPE Positional Embeddings**: Benefits from rotary position embeddings for better spatial understanding
-- **LoRA Fine-tuning**: Optional parameter-efficient fine-tuning using Low-Rank Adaptation
-- **Flexible Architecture**: Supports multiple DINOv3 variants (ViT-S, ViT-B, ViT-L, ViT-G)
+## 🎯 Core Innovations
+
+### **1. Adaptive Template & Search Sizing**
+```
+Object Size         Template Size    Search Size
+───────────────────────────────────────────────
+Small (< 50px)      64×64           192×192
+Medium (50-150px)   128×128         256×256
+Large (150-300px)   224×224         448×448
+Very Large (>300px) 384×384         768×768
+```
+
+### **2. Confidence-Based Search Expansion**
+- **High Confidence (>0.8)**: Normal search region
+- **Medium Confidence (0.5-0.8)**: 1.5× expanded search
+- **Low Confidence (<0.5)**: 2.5× expanded search (re-detection mode)
+
+### **3. Quality-Aware Template Update**
+- Template bank with exponential moving average
+- Updates only on high-quality frames (confidence >0.85, low occlusion)
+- Maintains initial template for reference
+
+### **4. Multi-Scale Re-Detection**
+- Pyramid search at [384, 512, 768] pixels when object is lost
+- Automatic recovery from temporary occlusions
+- Maintains long-term tracking stability
+
+## Key Technical Features
+
+- **DINOv3-Small Backbone**: Efficient frozen backbone for fast training
+- **TrulyDynamicCenterPredictor**: Head that handles variable feature map sizes
+- **RoPE Positional Embeddings**: Natural handling of different resolutions
+- **Template Bank**: Robust against temporary quality degradation
+- **Occlusion Detection**: Score map entropy-based quality assessment
 
 ## Original OSTrack
 
@@ -120,62 +152,125 @@ Put the tracking datasets in ./data. It should look like this:
 
 ## Training
 
-### Option 1: Training with DINOv3 (Recommended)
+### Prerequisites
 
-Download pre-trained DINOv3 weights and put them under `$PROJECT_ROOT$/pretrained_models`:
-- [DINOv3 ViT-Small](https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth)
-- [DINOv3 ViT-Base](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth)
-- [DINOv3 ViT-Large](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth)
+Download pre-trained [DINOv3 ViT-Small-16 weights](https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth) and put it under `$PROJECT_ROOT$/pretrained_models/`:
 
 ```bash
-# Training with DINOv3 ViT-Base (frozen backbone)
-python tracking/train.py --script dostrack --config dinov3_vitb16_no_ce --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
-
-# Training with LoRA fine-tuning
-python tracking/train.py --script dostrack --config dinov3_vitb16_lora_ce_32x4_ep300 --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
+mkdir -p pretrained_models
+cd pretrained_models
+# Download DINOv3-Small pretrained weights
+wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth
+mv dinov2_vits14_pretrain.pth dinov3_vits16_pretrain.pth
+cd ..
 ```
 
-### Option 2: Training with Original MAE ViT
-
-Download pre-trained [MAE ViT-Base weights](https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth) and put it under `$PROJECT_ROOT$/pretrained_models`:
+### Training DOSTrack
 
 ```bash
-python tracking/train.py --script dostrack --config vitb_256_mae_ce_32x4_ep300 --save_dir ./output --mode multiple --nproc_per_node 4 --use_wandb 1
+# Train with adaptive sizing (recommended)
+python tracking/train.py \
+  --script dostrack \
+  --config dostrack_adaptive \
+  --save_dir ./output \
+  --mode multiple \
+  --nproc_per_node 4 \
+  --use_wandb 1
 ```
 
-Replace `--config` with the desired model config under `experiments/dostrack`. We use [wandb](https://github.com/wandb/client) to record detailed training logs, in case you don't want to use wandb, set `--use_wandb 0`.
+**Training Features:**
+- **Frozen Backbone**: DINOv3-Small stays frozen, only head is trained
+- **Fast Convergence**: ~12-15 hours on 4× V100 GPUs (vs. 24h+ for full training)
+- **Batch Size**: 64 (larger than traditional due to frozen backbone)
+- **Adaptive Training**: Supports variable template/search sizes during training
+
+**Configuration Options** (`experiments/dostrack/dostrack_adaptive.yaml`):
+```yaml
+# Enable/disable adaptive features
+DATA.ADAPTIVE.ENABLED: True
+TEST.ADAPTIVE.ENABLED: True
+
+# Adjust sizing thresholds
+DATA.ADAPTIVE.SIZE_THRESHOLDS: [50, 150, 300]
+DATA.ADAPTIVE.TEMPLATE_SIZES: [64, 128, 224, 384]
+
+# Template update parameters
+DATA.ADAPTIVE.TEMPLATE_UPDATE.CONFIDENCE_THRESHOLD: 0.85
+DATA.ADAPTIVE.TEMPLATE_UPDATE.UPDATE_INTERVAL: 5
+```
 
 
 ## Evaluation
 
-Put the trained weights on `$PROJECT_ROOT$/output/checkpoints/train/dostrack`
+### Setup
 
-Change the corresponding values of `lib/test/evaluation/local.py` to the actual benchmark saving paths
+Put the trained weights in: `$PROJECT_ROOT$/output/checkpoints/train/dostrack/dostrack_adaptive/DOSTrack_ep0300.pth.tar`
 
-### Testing with DOSTrack
+Update dataset paths in `lib/test/evaluation/local.py`
 
-Some testing examples:
-- LaSOT or other off-line evaluated benchmarks (modify `--dataset` correspondingly)
+### Testing with Adaptive Tracking
+
 ```bash
-python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset lasot --threads 16 --num_gpus 4
-python tracking/analysis_results.py # need to modify tracker configs and names
+# LaSOT benchmark
+python tracking/test.py dostrack dostrack_adaptive \
+  --dataset lasot \
+  --threads 16 \
+  --num_gpus 4
+
+# GOT10K-test
+python tracking/test.py dostrack dostrack_adaptive \
+  --dataset got10k_test \
+  --threads 16 \
+  --num_gpus 4
+
+# TrackingNet
+python tracking/test.py dostrack dostrack_adaptive \
+  --dataset trackingnet \
+  --threads 16 \
+  --num_gpus 4
 ```
-- GOT10K-test
+
+### Debug Mode (Visualize Adaptive Behavior)
+
 ```bash
-python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset got10k_test --threads 16 --num_gpus 4
-python lib/test/utils/transform_got10k.py --tracker_name dostrack --cfg_name dinov3_vitb16_no_ce
-```
-- TrackingNet
-```bash
-python tracking/test.py dostrack dinov3_vitb16_no_ce --dataset trackingnet --threads 16 --num_gpus 4
-python lib/test/utils/transform_trackingnet.py --tracker_name dostrack --cfg_name dinov3_vitb16_no_ce
+python tracking/test.py dostrack dostrack_adaptive \
+  --dataset vot22 \
+  --threads 1 \
+  --num_gpus 1 \
+  --debug 1
 ```
 
-### Backward Compatibility
+**Debug output shows:**
+- Current template and search sizes
+- Confidence scores
+- Template update events
+- Size adjustments
 
-The framework still supports testing with original OSTrack models:
-```bash
-python tracking/test.py ostrack vitb_384_mae_ce_32x4_ep300 --dataset lasot --threads 16 --num_gpus 4
+**Debug visualizations saved to:** `debug/0001.jpg`, `debug/0002.jpg`, etc.
+
+### Adaptive Features in Testing
+
+When `TEST.ADAPTIVE.ENABLED: True`:
+- ✅ **Dynamic sizing** based on object size
+- ✅ **Confidence-based expansion** of search region
+- ✅ **Template updates** with quality assessment
+- ✅ **Multi-scale re-detection** when object is lost
+- ✅ **Automatic size adjustment** every 5 frames
+
+Example output:
+```
+[DOSTrack] Adaptive sizing initialized:
+  Object size: 45.3x67.8
+  Template size: 64x64
+  Search size: 192x192
+  Search factor: 3.00
+
+[DOSTrack] Template updated at frame 15, conf=0.891
+[DOSTrack] Adjusting sizes:
+  Template: 64 -> 128
+  Search: 192 -> 256
+[DOSTrack] Low confidence (0.287), lost count: 1
+[DOSTrack] Re-detected at scale 1
 ```
 
 ## Visualization or Debug
